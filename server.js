@@ -2,10 +2,10 @@ const express = require('express');
 const multer = require('multer');
 const csvParser = require('csv-parser');
 const { Parser } = require('json2csv');
-const fs = require('fs');
+const { Readable } = require('stream');
 
 const app = express();
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(express.static('public'));
 app.use(express.json());
@@ -69,14 +69,13 @@ function validateDate(dateStr) {
   if (!formatMatch)
     return { valid: false, reason: `Unrecognised date format: "${dateStr}"` };
 
-  // extract day, month, year based on format and check it's a real calendar date
   let day, month, year;
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed) || /^\d{4}\/\d{2}\/\d{2}$/.test(trimmed)) {
     [year, month, day] = trimmed.split(/[-/]/).map(Number);
   } else if (/^\d{2}-\d{2}-\d{4}$/.test(trimmed) || /^\d{2}\/\d{2}\/\d{4}$/.test(trimmed) || /^\d{2}\.\d{2}\.\d{4}$/.test(trimmed)) {
     [day, month, year] = trimmed.split(/[-/.]/).map(Number);
   } else {
-    return { valid: true }; // ISO timestamp formats, skip manual check
+    return { valid: true };
   }
 
   if (month < 1 || month > 12)
@@ -101,13 +100,11 @@ function validateEmail(email) {
 function validateOrderFields(row, keys) {
   const errors = [];
 
-  // order_id must exist and be non-empty
   if (keys.orderIdKey) {
     const val = row[keys.orderIdKey]?.toString().trim();
     if (!val) errors.push('Order ID is missing');
   }
 
-  // amount must be a positive number
   if (keys.amountKey) {
     const val = row[keys.amountKey]?.toString().trim();
     if (!val) {
@@ -117,7 +114,6 @@ function validateOrderFields(row, keys) {
     }
   }
 
-  // quantity must be a positive integer if present
   if (keys.quantityKey) {
     const val = row[keys.quantityKey]?.toString().trim();
     if (val && (isNaN(parseInt(val)) || parseInt(val) <= 0)) {
@@ -132,7 +128,6 @@ function validateOrderFields(row, keys) {
 function validateProductFields(row, keys) {
   const errors = [];
 
-  // product_id or product_name must exist
   if (keys.productIdKey) {
     const val = row[keys.productIdKey]?.toString().trim();
     if (!val) errors.push('Product ID is missing');
@@ -143,7 +138,6 @@ function validateProductFields(row, keys) {
     if (!val) errors.push('Product name is missing');
   }
 
-  // price must be a positive number if present
   if (keys.priceKey) {
     const val = row[keys.priceKey]?.toString().trim();
     if (val && (isNaN(parseFloat(val)) || parseFloat(val) < 0)) {
@@ -169,8 +163,9 @@ app.post('/upload', upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
   const rows = [];
+  const stream = Readable.from(req.file.buffer.toString());
 
-  fs.createReadStream(req.file.path)
+  stream
     .pipe(csvParser())
     .on('data', row => {
       const clean = {};
@@ -180,12 +175,9 @@ app.post('/upload', upload.single('file'), (req, res) => {
       rows.push(clean);
     })
     .on('end', () => {
-      fs.unlinkSync(req.file.path);
-
       if (rows.length === 0)
         return res.status(400).json({ error: 'CSV is empty' });
 
-      // ── Auto-detect all column types ──
       const headers = Object.keys(rows[0]);
 
       const phoneKey       = detectColumn(headers, /phone|mobile|contact|cell/i);
@@ -193,17 +185,14 @@ app.post('/upload', upload.single('file'), (req, res) => {
       const dateKey        = detectColumn(headers, /date|time|_at|created|signup|order_date/i);
       const countryKey     = detectColumn(headers, /country|cc|region|locale/i);
 
-      // Order-level columns
       const orderIdKey     = detectColumn(headers, /order.?id|order.?no|order.?num/i);
       const amountKey      = detectColumn(headers, /^amount$|total.?amount|order.?amount|price.?total|grand.?total/i);
       const quantityKey    = detectColumn(headers, /^qty$|^quantity$|units/i);
 
-      // Product-level columns
       const productIdKey   = detectColumn(headers, /product.?id|prod.?id|item.?id/i);
       const productNameKey = detectColumn(headers, /product.?name|item.?name|product.?title|prod.?name/i);
       const priceKey       = detectColumn(headers, /^price$|unit.?price|item.?price|product.?price/i);
 
-      // Payment mode
       const paymentKey     = detectColumn(headers, /payment.?mode|payment.?method|pay.?type|payment.?type/i);
 
       const detectedColumns = {
@@ -223,7 +212,6 @@ app.post('/upload', upload.single('file'), (req, res) => {
 
         const country = countryKey ? row[countryKey]?.trim().toUpperCase() : 'IN';
 
-        // Core contact/date checks
         if (phoneKey) {
           const r = validatePhone(row[phoneKey], country);
           if (!r.valid) rowErrors.push(`Phone: ${r.reason}`);
@@ -231,25 +219,22 @@ app.post('/upload', upload.single('file'), (req, res) => {
         if (dateKey) {
           const r = validateDate(row[dateKey]);
           if (!r.valid) rowErrors.push(`Date: ${r.reason}`);
-}
+        }
         if (emailKey) {
           const r = validateEmail(row[emailKey]);
           if (!r.valid) rowErrors.push(`Email: ${r.reason}`);
         }
 
-        // Order-level checks
         const orderKeys = { orderIdKey, amountKey, quantityKey };
         if (orderIdKey || amountKey || quantityKey) {
           validateOrderFields(row, orderKeys).forEach(e => rowErrors.push(`Order: ${e}`));
         }
 
-        // Product-level checks
         const productKeys = { productIdKey, productNameKey, priceKey };
         if (productIdKey || productNameKey || priceKey) {
           validateProductFields(row, productKeys).forEach(e => rowErrors.push(`Product: ${e}`));
         }
 
-        // Payment mode check
         if (paymentKey) {
           const r = validatePaymentMode(row[paymentKey]);
           if (!r.valid) rowErrors.push(`Payment: ${r.reason}`);

@@ -63,8 +63,29 @@ function validatePhone(phone, countryCode) {
 function validateDate(dateStr) {
   if (!dateStr || dateStr.trim() === '')
     return { valid: false, reason: 'Date is missing' };
-  if (!validDateFormats.some(fmt => fmt.test(dateStr.trim())))
+
+  const trimmed = dateStr.trim();
+  const formatMatch = validDateFormats.some(fmt => fmt.test(trimmed));
+  if (!formatMatch)
     return { valid: false, reason: `Unrecognised date format: "${dateStr}"` };
+
+  // extract day, month, year based on format and check it's a real calendar date
+  let day, month, year;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed) || /^\d{4}\/\d{2}\/\d{2}$/.test(trimmed)) {
+    [year, month, day] = trimmed.split(/[-/]/).map(Number);
+  } else if (/^\d{2}-\d{2}-\d{4}$/.test(trimmed) || /^\d{2}\/\d{2}\/\d{4}$/.test(trimmed) || /^\d{2}\.\d{2}\.\d{4}$/.test(trimmed)) {
+    [day, month, year] = trimmed.split(/[-/.]/).map(Number);
+  } else {
+    return { valid: true }; // ISO timestamp formats, skip manual check
+  }
+
+  if (month < 1 || month > 12)
+    return { valid: false, reason: `Invalid month in date: "${dateStr}"` };
+
+  const daysInMonth = new Date(year, month, 0).getDate();
+  if (day < 1 || day > daysInMonth)
+    return { valid: false, reason: `Invalid day in date: "${dateStr}"` };
+
   return { valid: true };
 }
 
@@ -207,10 +228,10 @@ app.post('/upload', upload.single('file'), (req, res) => {
           const r = validatePhone(row[phoneKey], country);
           if (!r.valid) rowErrors.push(`Phone: ${r.reason}`);
         }
-        if (dateKey && row[dateKey]) {
+        if (dateKey) {
           const r = validateDate(row[dateKey]);
           if (!r.valid) rowErrors.push(`Date: ${r.reason}`);
-        }
+}
         if (emailKey) {
           const r = validateEmail(row[emailKey]);
           if (!r.valid) rowErrors.push(`Email: ${r.reason}`);

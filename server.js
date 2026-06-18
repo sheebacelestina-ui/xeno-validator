@@ -302,4 +302,8 @@ app.post('/download-chunk', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✓ Xeno Validator running → http://localhost:${PORT}`));
+if (process.env.VERCEL !== '1') {
+  app.listen(PORT, () => console.log(`✓ Xeno Validator running → http://localhost:${PORT}`));
+}
+
+module.exports = app;

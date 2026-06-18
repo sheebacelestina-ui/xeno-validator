@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Xeno — Transaction Validator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:        #080D1A;
+      --surface:   #0F1629;
+      --surface2:  #151E35;
+      --border:    #1E2D4F;
+      --teal:      #00D4AA;
+      --teal-dim:  rgba(0,212,170,0.12);
+      --teal-glow: rgba(0,212,170,0.25);
+      --red:       #FF5A5A;
+      --red-dim:   rgba(255,90,90,0.12);
+      --gold:      #F5A623;
+      --purple:    #A78BFA;
+      --purple-dim:rgba(167,139,250,0.12);
+      --blue:      #60A5FA;
+      --blue-dim:  rgba(96,165,250,0.12);
+      --text:      #E8EDF5;
+      --muted:     #6B7A99;
+      --subtle:    #2A3550;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+
+    /* HEADER */
+    header {
+      position:sticky; top:0; z-index:100;
+      background:rgba(8,13,26,0.92); backdrop-filter:blur(16px);
+      border-bottom:1px solid var(--border);
+      padding:0 40px; height:60px;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .logo { display:flex; align-items:center; gap:12px; }
+    .logo-mark { width:32px; height:32px; background:var(--teal); border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; color:#080D1A; }
+    .logo-name { font-weight:700; font-size:16px; }
+    .logo-divider { width:1px; height:20px; background:var(--border); }
+    .logo-product { font-size:13px; color:var(--muted); }
+    .header-status { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); }
+    .status-dot { width:7px; height:7px; border-radius:50%; background:var(--teal); animation:pulse-dot 2s ease-in-out infinite; }
+    @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+
+    /* HERO */
+    .hero { padding:72px 40px 0; max-width:1100px; margin:0 auto; }
+    .hero-eyebrow { display:inline-flex; align-items:center; gap:8px; background:var(--teal-dim); border:1px solid rgba(0,212,170,0.2); border-radius:20px; padding:5px 14px; font-size:11px; font-weight:600; color:var(--teal); letter-spacing:.8px; text-transform:uppercase; margin-bottom:24px; }
+    .hero h1 { font-size:clamp(32px,4vw,52px); font-weight:800; line-height:1.1; letter-spacing:-1.5px; margin-bottom:16px; }
+    .hero h1 span { color:var(--teal); }
+    .hero p { font-size:16px; color:var(--muted); max-width:560px; line-height:1.7; margin-bottom:48px; }
+
+    /* UPLOAD */
+    .upload-panel { max-width:1100px; margin:0 auto; padding:0 40px 40px; }
+    .upload-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:40px; position:relative; overflow:hidden; }
+    .upload-card::before { content:''; position:absolute; top:-80px; right:-80px; width:260px; height:260px; background:radial-gradient(circle,var(--teal-glow) 0%,transparent 70%); pointer-events:none; }
+    .upload-layout { display:grid; grid-template-columns:1fr auto; gap:32px; align-items:center; }
+
+    .drop-zone { border:1.5px dashed var(--border); border-radius:12px; padding:36px 28px; text-align:center; cursor:pointer; transition:all .2s; background:var(--bg); }
+    .drop-zone:hover,.drop-zone.dragover { border-color:var(--teal); background:var(--teal-dim); }
+    .drop-zone input { display:none; }
+    .drop-icon { width:52px; height:52px; background:var(--surface2); border:1px solid var(--border); border-radius:12px; display:flex; align-items:center; justify-content:center; margin:0 auto 16px; font-size:22px; transition:all .2s; }
+    .drop-zone:hover .drop-icon { background:var(--teal-dim); border-color:rgba(0,212,170,.3); }
+    .drop-title { font-size:14px; font-weight:600; margin-bottom:6px; }
+    .drop-hint { font-size:12px; color:var(--muted); }
+    .file-pill { display:none; align-items:center; gap:10px; background:var(--teal-dim); border:1px solid rgba(0,212,170,.25); border-radius:8px; padding:10px 14px; margin-top:14px; font-size:13px; color:var(--teal); font-weight:500; }
+    .file-pill.show { display:flex; }
+
+    .validate-btn { background:var(--teal); color:#080D1A; border:none; border-radius:12px; padding:16px 36px; font-size:15px; font-weight:700; cursor:pointer; white-space:nowrap; transition:all .2s; font-family:'Inter',sans-serif; }
+    .validate-btn:hover { background:#00EFBF; transform:translateY(-1px); box-shadow:0 8px 24px rgba(0,212,170,.3); }
+
+    /* RULES GRID — now 2x3 */
+    .rules-strip { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:24px; }
+    .rule-item { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:16px 18px; display:flex; gap:12px; align-items:flex-start; }
+    .rule-icon { width:32px; height:32px; border-radius:8px; background:var(--teal-dim); display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
+    .rule-icon.purple { background:var(--purple-dim); }
+    .rule-icon.blue { background:var(--blue-dim); }
+    .rule-title { font-size:12px; font-weight:600; margin-bottom:3px; }
+    .rule-desc { font-size:11px; color:var(--muted); line-height:1.5; }
+
+    /* DETECTED COLUMNS BANNER */
+    .detected-banner { max-width:1100px; margin:0 auto; padding:0 40px 20px; display:none; }
+    .detected-card { background:var(--surface2); border:1px solid rgba(0,212,170,0.2); border-radius:12px; padding:16px 22px; }
+    .detected-groups { display:flex; flex-wrap:wrap; gap:16px; }
+    .detected-group { display:flex; flex-direction:column; gap:6px; }
+    .detected-group-label { font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; }
+    .detected-tags { display:flex; gap:6px; flex-wrap:wrap; }
+    .col-tag { background:var(--teal-dim); border:1px solid rgba(0,212,170,.2); border-radius:6px; padding:4px 10px; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--teal); }
+    .col-tag.purple { background:var(--purple-dim); border-color:rgba(167,139,250,.2); color:var(--purple); }
+    .col-tag.blue { background:var(--blue-dim); border-color:rgba(96,165,250,.2); color:var(--blue); }
+    .col-tag.gold { background:rgba(245,166,35,0.12); border-color:rgba(245,166,35,.2); color:var(--gold); }
+    .col-tag.missing { background:rgba(255,90,90,0.08); border-color:rgba(255,90,90,.15); color:#888; font-style:italic; }
+
+    /* LOADING */
+    #loading { display:none; max-width:1100px; margin:0 auto; padding:0 40px 40px; }
+    .loading-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:48px; text-align:center; }
+    .loading-ring { width:56px; height:56px; border:3px solid var(--border); border-top:3px solid var(--teal); border-radius:50%; animation:spin .9s linear infinite; margin:0 auto 24px; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+    .loading-title { font-size:16px; font-weight:600; margin-bottom:8px; }
+    .loading-sub { font-size:13px; color:var(--muted); margin-bottom:28px; }
+    .progress-bar { width:100%; max-width:360px; height:4px; background:var(--border); border-radius:99px; margin:0 auto; overflow:hidden; }
+    .progress-fill { height:100%; background:linear-gradient(90deg,var(--teal),#00EFBF); border-radius:99px; animation:progress 1.8s ease-in-out infinite; }
+    @keyframes progress { 0%{width:0%;margin-left:0} 50%{width:70%;margin-left:0} 100%{width:0%;margin-left:100%} }
+
+    /* RESULTS */
+    #results { display:none; max-width:1100px; margin:0 auto; padding:0 40px 60px; }
+
+    .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+    .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:24px 22px; transition:transform .2s,border-color .2s; }
+    .stat-card:hover { transform:translateY(-2px); border-color:var(--subtle); }
+    .stat-card.is-valid { border-top:2px solid var(--teal); }
+    .stat-card.is-invalid { border-top:2px solid var(--red); }
+    .stat-card.is-chunks { border-top:2px solid var(--gold); }
+    .stat-label { font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin-bottom:12px; }
+    .stat-number { font-size:42px; font-weight:800; letter-spacing:-2px; line-height:1; font-family:'JetBrains Mono',monospace; }
+    .stat-card.is-valid .stat-number { color:var(--teal); }
+    .stat-card.is-invalid .stat-number { color:var(--red); }
+    .stat-card.is-chunks .stat-number { color:var(--gold); }
+    .stat-bar { height:3px; background:var(--border); border-radius:99px; margin-top:16px; overflow:hidden; }
+    .stat-bar-fill { height:100%; border-radius:99px; transition:width .8s cubic-bezier(.4,0,.2,1); width:0%; }
+    .stat-card.is-valid .stat-bar-fill { background:var(--teal); }
+    .stat-card.is-invalid .stat-bar-fill { background:var(--red); }
+
+    .results-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; overflow:hidden; margin-bottom:20px; }
+    .card-header { padding:22px 28px 0; border-bottom:1px solid var(--border); }
+    .card-title { font-size:14px; font-weight:600; margin-bottom:18px; }
+    .tabs { display:flex; }
+    .tab { padding:10px 20px; cursor:pointer; font-size:13px; color:var(--muted); border-bottom:2px solid transparent; font-weight:500; transition:color .15s; }
+    .tab:hover { color:var(--text); }
+    .tab.active { color:var(--teal); font-weight:600; border-bottom:2px solid var(--teal); }
+
+    .table-wrap { overflow-x:auto; max-height:360px; overflow-y:auto; }
+    .table-wrap::-webkit-scrollbar { width:6px; height:6px; }
+    .table-wrap::-webkit-scrollbar-track { background:var(--surface); }
+    .table-wrap::-webkit-scrollbar-thumb { background:var(--subtle); border-radius:3px; }
+    table { width:100%; border-collapse:collapse; font-size:12.5px; font-family:'JetBrains Mono',monospace; }
+    th { background:var(--surface2); padding:11px 16px; text-align:left; font-weight:600; font-size:10.5px; color:var(--muted); border-bottom:1px solid var(--border); position:sticky; top:0; text-transform:uppercase; letter-spacing:.6px; white-space:nowrap; z-index:1; }
+    td { padding:10px 16px; border-bottom:1px solid rgba(30,45,79,.5); white-space:nowrap; }
+    tr:last-child td { border-bottom:none; }
+    tr:hover td { background:var(--surface2); }
+    td.error-cell { color:var(--red); font-size:11px; white-space:normal; max-width:320px; font-family:'Inter',sans-serif; font-weight:500; }
+    .empty-state { padding:56px; text-align:center; color:var(--muted); font-size:13px; font-family:'Inter',sans-serif; }
+    .empty-icon { font-size:28px; margin-bottom:12px; }
+
+    .download-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:30px 28px; }
+    .download-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:22px; }
+    .download-title { font-size:14px; font-weight:600; margin-bottom:4px; }
+    .download-sub { font-size:12px; color:var(--muted); }
+    .download-btns { display:flex; gap:12px; flex-wrap:wrap; }
+    .btn-primary { background:var(--teal); color:#080D1A; border:none; border-radius:8px; padding:10px 22px; font-size:13px; font-weight:700; cursor:pointer; transition:all .2s; font-family:'Inter',sans-serif; }
+    .btn-primary:hover { background:#00EFBF; box-shadow:0 4px 16px rgba(0,212,170,.25); }
+    .btn-secondary { background:transparent; color:var(--muted); border:1px solid var(--border); border-radius:8px; padding:10px 22px; font-size:13px; font-weight:600; cursor:pointer; transition:all .2s; font-family:'Inter',sans-serif; }
+    .btn-secondary:hover { color:var(--text); border-color:var(--subtle); }
+    .chunks-section { margin-top:24px; }
+    .chunks-label { font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin-bottom:12px; }
+    .chunks-grid { display:flex; flex-wrap:wrap; gap:8px; }
+    .chunk-btn { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:8px 16px; font-size:12px; color:var(--muted); cursor:pointer; transition:all .2s; font-family:'JetBrains Mono',monospace; }
+    .chunk-btn:hover { background:var(--subtle); color:var(--text); }
+
+    .hidden { display:none !important; }
+
+    @media (max-width:768px) {
+      header { padding:0 20px; }
+      .hero,.upload-panel,.detected-banner,#loading,#results { padding-left:20px; padding-right:20px; }
+      .hero { padding-top:48px; }
+      .stats { grid-template-columns:repeat(2,1fr); }
+      .upload-layout { grid-template-columns:1fr; }
+      .rules-strip { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark">X</div>
+    <span class="logo-name">Xeno</span>
+    <div class="logo-divider"></div>
+    <span class="logo-product">Transaction Validator</span>
+  </div>
+  <div class="header-status">
+    <div class="status-dot"></div>
+    System ready
+  </div>
+</header>
+
+<div class="hero">
+  <div class="hero-eyebrow"><span>⚡</span> Data Validation Engine</div>
+  <h1>Clean data, <span>faster<br>decisions.</span></h1>
+  <p>Upload any transaction CSV — columns are auto-detected. Order, product, payment, phone, email, and date validation runs instantly across all international formats.</p>
+</div>
+
+<div class="upload-panel">
+  <div class="upload-card">
+    <div class="upload-layout">
+      <div>
+        <div class="drop-zone" id="dropZone"
+          ondragover="handleDragOver(event)"
+          ondragleave="handleDragLeave(event)"
+          ondrop="handleDrop(event)"
+          onclick="document.getElementById('fileInput').click()">
+          <input type="file" id="fileInput" accept=".csv" onchange="handleFileSelect(event)"/>
+          <div class="drop-icon">📄</div>
+          <div class="drop-title">Drop your transaction CSV here</div>
+          <div class="drop-hint">or click to browse — order, product & payment columns auto-detected</div>
+          <div class="file-pill" id="filePill">
+            <span>✓</span>
+            <span id="fileName">—</span>
+          </div>
+        </div>
+
+        <div class="rules-strip">
+          <div class="rule-item">
+            <div class="rule-icon">🧾</div>
+            <div>
+              <div class="rule-title">Order Validation</div>
+              <div class="rule-desc">Checks order_id presence, amount is a positive number, quantity is a valid integer</div>
+            </div>
+          </div>
+          <div class="rule-item">
+            <div class="rule-icon purple">📦</div>
+            <div>
+              <div class="rule-title">Product Validation</div>
+              <div class="rule-desc">Validates product_id, product_name presence, and unit price is non-negative</div>
+            </div>
+          </div>
+          <div class="rule-item">
+            <div class="rule-icon blue">💳</div>
+            <div>
+              <div class="rule-title">Payment Mode</div>
+              <div class="rule-desc">Accepts card, UPI, cash, wallet, net_banking, COD, PayPal, crypto and more</div>
+            </div>
+          </div>
+          <div class="rule-item">
+            <div class="rule-icon">📞</div>
+            <div>
+              <div class="rule-title">Phone Validation</div>
+              <div class="rule-desc">Country-specific digit rules: India (10), Singapore (8), US/UK (10), AU/AE/MY (9)</div>
+            </div>
+          </div>
+          <div class="rule-item">
+            <div class="rule-icon">📅</div>
+            <div>
+              <div class="rule-title">Date Formats</div>
+              <div class="rule-desc">Accepts YYYY-MM-DD, DD/MM/YYYY, DD.MM.YYYY, ISO 8601 and more</div>
+            </div>
+          </div>
+          <div class="rule-item">
+            <div class="rule-icon">✉️</div>
+            <div>
+              <div class="rule-title">Email Integrity</div>
+              <div class="rule-desc">Format check — all rows must have a valid, present email address</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button class="validate-btn" onclick="uploadFile()">Validate →</button>
+    </div>
+  </div>
+</div>
+
+<!-- DETECTED COLUMNS BANNER -->
+<div class="detected-banner" id="detectedBanner">
+  <div class="detected-card">
+    <div class="detected-groups" id="detectedGroups"></div>
+  </div>
+</div>
+
+<div id="loading">
+  <div class="loading-card">
+    <div class="loading-ring"></div>
+    <div class="loading-title">Validating your data</div>
+    <div class="loading-sub">Auto-detecting columns — running order, product, payment, phone, email and date checks…</div>
+    <div class="progress-bar"><div class="progress-fill"></div></div>
+  </div>
+</div>
+
+<div id="results">
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-label">Total Rows</div>
+      <div class="stat-number" id="totalCount">—</div>
+    </div>
+    <div class="stat-card is-valid">
+      <div class="stat-label">Valid</div>
+      <div class="stat-number" id="validCount">—</div>
+      <div class="stat-bar"><div class="stat-bar-fill" id="validBar"></div></div>
+    </div>
+    <div class="stat-card is-invalid">
+      <div class="stat-label">Invalid</div>
+      <div class="stat-number" id="invalidCount">—</div>
+      <div class="stat-bar"><div class="stat-bar-fill" id="invalidBar"></div></div>
+    </div>
+    <div class="stat-card is-chunks">
+      <div class="stat-label">File Chunks</div>
+      <div class="stat-number" id="chunksCount">—</div>
+    </div>
+  </div>
+
+  <div class="results-card">
+    <div class="card-header">
+      <div class="card-title">Validation Results</div>
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('valid')">✓ Valid Rows</div>
+        <div class="tab" onclick="switchTab('invalid')">✕ Invalid Rows</div>
+        <div class="tab" onclick="switchTab('errors')">Error Log</div>
+      </div>
+    </div>
+    <div id="validTab" class="table-wrap"><table id="validTable"></table></div>
+    <div id="invalidTab" class="table-wrap hidden"><table id="invalidTable"></table></div>
+    <div id="errorsTab" class="table-wrap hidden"><table id="errorsTable"></table></div>
+  </div>
+
+  <div class="download-card">
+    <div class="download-header">
+      <div>
+        <div class="download-title">Export Results</div>
+        <div class="download-sub">Download clean or flagged data, or split into manageable chunks</div>
+      </div>
+      <div class="download-btns">
+        <button class="btn-primary" onclick="downloadData('valid')">↓ Valid CSV</button>
+        <button class="btn-secondary" onclick="downloadData('invalid')">↓ Invalid CSV</button>
+      </div>
+    </div>
+    <div class="chunks-section hidden" id="chunksWrapper">
+      <div class="chunks-label">Download by Chunk</div>
+      <div class="chunks-grid" id="chunksList"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let validData = [], invalidData = [], chunksData = [];
+
+  function handleDragOver(e) { e.preventDefault(); document.getElementById('dropZone').classList.add('dragover'); }
+  function handleDragLeave() { document.getElementById('dropZone').classList.remove('dragover'); }
+  function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById('dropZone').classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file?.name.endsWith('.csv')) setFile(file);
+  }
+  function handleFileSelect(e) { if (e.target.files[0]) setFile(e.target.files[0]); }
+  function setFile(file) {
+    document.getElementById('fileName').textContent = file.name;
+    document.getElementById('filePill').classList.add('show');
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    document.getElementById('fileInput').files = dt.files;
+  }
+
+  async function uploadFile() {
+    const fileInput = document.getElementById('fileInput');
+    if (!fileInput.files[0]) { alert('Please select a CSV file first.'); return; }
+
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('detectedBanner').style.display = 'none';
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    try {
+      const response = await fetch('/upload', { method: 'POST', body: formData });
+      const data = await response.json();
+
+      validData = data.validData;
+      invalidData = data.invalidData;
+
+      const chunkSize = 100;
+      chunksData = [];
+      for (let i = 0; i < validData.length; i += chunkSize)
+        chunksData.push(validData.slice(i, i + chunkSize));
+
+      document.getElementById('totalCount').textContent = data.total;
+      document.getElementById('validCount').textContent = data.valid;
+      document.getElementById('invalidCount').textContent = data.invalid;
+      document.getElementById('chunksCount').textContent = data.chunks;
+
+      setTimeout(() => {
+        document.getElementById('validBar').style.width = data.total ? (data.valid / data.total * 100) + '%' : '0%';
+        document.getElementById('invalidBar').style.width = data.total ? (data.invalid / data.total * 100) + '%' : '0%';
+      }, 80);
+
+      showDetectedColumns(data.detectedColumns);
+      buildTable('validTable', validData, false);
+      buildTable('invalidTable', invalidData, true);
+      buildErrorTable(data.errors);
+      buildChunkButtons(chunksData);
+
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('results').style.display = 'block';
+
+    } catch (err) {
+      document.getElementById('loading').style.display = 'none';
+      alert('Something went wrong. Please try again.');
+    }
+  }
+
+  function showDetectedColumns(cols) {
+    const groups = [
+      {
+        label: 'Order',
+        color: 'teal',
+        items: [
+          { key: 'orderIdKey',  icon: '🧾', label: 'Order ID' },
+          { key: 'amountKey',   icon: '💰', label: 'Amount' },
+          { key: 'quantityKey', icon: '#',  label: 'Quantity' },
+        ]
+      },
+      {
+        label: 'Product',
+        color: 'purple',
+        items: [
+          { key: 'productIdKey',   icon: '📦', label: 'Product ID' },
+          { key: 'productNameKey', icon: '🏷',  label: 'Product Name' },
+          { key: 'priceKey',       icon: '💲', label: 'Price' },
+        ]
+      },
+      {
+        label: 'Payment',
+        color: 'blue',
+        items: [
+          { key: 'paymentKey', icon: '💳', label: 'Payment Mode' },
+        ]
+      },
+      {
+        label: 'Contact / Date',
+        color: 'gold',
+        items: [
+          { key: 'phoneKey',   icon: '📞', label: 'Phone' },
+          { key: 'emailKey',   icon: '✉️', label: 'Email' },
+          { key: 'dateKey',    icon: '📅', label: 'Date' },
+          { key: 'countryKey', icon: '🌍', label: 'Country' },
+        ]
+      },
+    ];
+
+    const container = document.getElementById('detectedGroups');
+    container.innerHTML = '';
+
+    groups.forEach(group => {
+      const groupEl = document.createElement('div');
+      groupEl.className = 'detected-group';
+      groupEl.innerHTML = `<div class="detected-group-label">${group.label}</div><div class="detected-tags"></div>`;
+      const tagsEl = groupEl.querySelector('.detected-tags');
+
+      group.items.forEach(item => {
+        const tag = document.createElement('span');
+        if (cols[item.key]) {
+          tag.className = `col-tag ${group.color}`;
+          tag.textContent = `${item.icon} ${cols[item.key]}`;
+        } else {
+          tag.className = 'col-tag missing';
+          tag.textContent = `${item.label}: not found`;
+        }
+        tagsEl.appendChild(tag);
+      });
+
+      container.appendChild(groupEl);
+    });
+
+    document.getElementById('detectedBanner').style.display = 'block';
+  }
+
+  function buildTable(tableId, rows, showErrors) {
+    const table = document.getElementById(tableId);
+    if (!rows || rows.length === 0) {
+      table.innerHTML = `<tr><td><div class="empty-state"><div class="empty-icon">${showErrors ? '✓' : '—'}</div>${showErrors ? 'No invalid rows — all data passed!' : 'No valid data to display'}</div></td></tr>`;
+      return;
+    }
+    const headers = Object.keys(rows[0]).filter(h => h !== 'errors');
+    let html = '<thead><tr>' + headers.map(h => `<th>${h}</th>`).join('');
+    if (showErrors) html += '<th>Errors</th>';
+    html += '</tr></thead><tbody>';
+    rows.slice(0, 200).forEach(row => {
+      html += '<tr>' + headers.map(h => `<td>${row[h] ?? ''}</td>`).join('');
+      if (showErrors) html += `<td class="error-cell">${row.errors || ''}</td>`;
+      html += '</tr>';
+    });
+    html += '</tbody>';
+    table.innerHTML = html;
+  }
+
+  function buildErrorTable(errors) {
+    const table = document.getElementById('errorsTable');
+    if (!errors || errors.length === 0) {
+      table.innerHTML = `<tr><td><div class="empty-state"><div class="empty-icon">🎉</div>All rows passed validation!</div></td></tr>`;
+      return;
+    }
+    let html = '<thead><tr><th>Row #</th><th>Issues Found</th></tr></thead><tbody>';
+    errors.forEach(e => { html += `<tr><td>${e.row}</td><td class="error-cell">${e.issues.join('<br/>')}</td></tr>`; });
+    html += '</tbody>';
+    table.innerHTML = html;
+  }
+
+  function buildChunkButtons(chunks) {
+    const list = document.getElementById('chunksList');
+    const wrapper = document.getElementById('chunksWrapper');
+    list.innerHTML = '';
+    if (chunks.length <= 1) { wrapper.classList.add('hidden'); return; }
+    wrapper.classList.remove('hidden');
+    chunks.forEach((chunk, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'chunk-btn';
+      btn.textContent = `chunk_${i + 1}.csv  ·  ${chunk.length} rows`;
+      btn.onclick = () => downloadChunk(i);
+      list.appendChild(btn);
+    });
+  }
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab').forEach((t, i) => {
+      t.classList.toggle('active', ['valid','invalid','errors'][i] === tab);
+    });
+    document.getElementById('validTab').classList.toggle('hidden', tab !== 'valid');
+    document.getElementById('invalidTab').classList.toggle('hidden', tab !== 'invalid');
+    document.getElementById('errorsTab').classList.toggle('hidden', tab !== 'errors');
+  }
+
+  async function downloadData(type) {
+    const data = type === 'valid' ? validData : invalidData;
+    if (!data?.length) { alert(`No ${type} data to download.`); return; }
+    const blob = await fetch('/download', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({data,type}) }).then(r=>r.blob());
+    triggerDownload(blob, `${type}_data.csv`);
+  }
+
+  async function downloadChunk(index) {
+    const blob = await fetch('/download-chunk', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({data:chunksData[index],chunkIndex:index}) }).then(r=>r.blob());
+    triggerDownload(blob, `chunk_${index + 1}.csv`);
+  }
+
+  function triggerDownload(blob, filename) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+  }
+</script>
+</body>
+</html>

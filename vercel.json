@@ -4,9 +4,6 @@
     { "src": "server.js", "use": "@vercel/node" }
   ],
   "routes": [
-    { "src": "/upload", "dest": "server.js" },
-    { "src": "/download", "dest": "server.js" },
-    { "src": "/download-chunk", "dest": "server.js" },
-    { "src": "/(.*)", "dest": "public/$1" }
+    { "src": "/(.*)", "dest": "server.js" }
   ]
 }
